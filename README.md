@@ -73,9 +73,9 @@ To get a local copy up and running, follow these steps.
 
 1. Clone the repository:
 
-   \`\`\`bash
+   ```bash
    git clone https://github.com/stefan-smol/bidder.git
    cd bidder
-   \`\`\`
+   ```
 
 2. Follow the installation steps for the frontend and backend as described in their respective README files located in the frontend and backend directories.
