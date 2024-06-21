@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: BIDDER-GATEWAY
+  cloud:
+    gateway:
+      routes:
+        - id: user-service-auth
+          uri: lb://USER-SERVICE
+          predicates:
+            - Path=/api/v1/auth/**
+
+        - id: user-service-protected
+          uri: lb://USER-SERVICE
+          predicates:
+            - Path=/api/v1/users/**
+          filters:
+            - AuthFilter
+            
+        - id: user-service-sessions
+          uri: lb://USER-SERVICE
+          predicates:
+            - Path=/api/v1/sessions/**
+          filters:
+            - AuthFilter            
+            
+        - id: auction-catalogue-service
+          uri: lb://AUCTION-CATALOGUE-SERVICE
+          predicates:
+            - Path=/api/v1/catalogue/**
+          filters:
+            - AuthFilter
+            
+        - id: auction-processing-service
+          uri: lb://AUCTION-PROCESSING-SERVICE
+          predicates:
+            - Path=/api/v1/process/**
+          filters:
+            - AuthFilter           
+            
+        - id: notification-service-rest
+          uri: lb://NOTIFICATION-SERVICE
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - AuthFilter
+
+        - id: notification-service-websocket
+          uri: lb://NOTIFICATION-SERVICE
+          predicates:
+            - Path=/ws/**
+            
+        - id: payment-processing-service
+          uri: lb://PAYMENT-PROCESSING-SERVICE
+          predicates:
+            - Path=/api/v1/payments/**
+          filters:
+            - AuthFilter                     
+        
+                
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/

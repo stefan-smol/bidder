@@ -1,0 +1,2 @@
+scripts/wait-for-it.sh -text
+*.sh text eol=lf

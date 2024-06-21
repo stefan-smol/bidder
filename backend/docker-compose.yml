@@ -1,0 +1,182 @@
+services:
+  mongodb:
+    image: mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=notification_service_db
+    networks:
+      - bidder-network
+
+  mysql_db:
+    image: mysql:latest
+    healthcheck:
+      test: ["CMD", "mysqladmin", "-u root", "--password=pass", "ping"]
+      timeout: 10s
+      retries: 10
+      interval: 30s
+      start_period: 1m
+      
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=pass
+    volumes:
+      - ./setup_database.sql:/docker-entrypoint-initdb.d/setup_database.sql
+    networks:
+      - bidder-network
+
+  eureka-server:
+    build:
+      context: .
+      dockerfile: discovery-server/Dockerfile
+    ports:
+      - "8761:8761"
+    networks:
+      - bidder-network
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    ports:
+      - "8080:8080"
+    networks:
+      - bidder-network
+    depends_on:
+      - eureka-server
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+
+  rabbitmq:
+    image: rabbitmq:management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - bidder-network
+    depends_on:
+      - eureka-server
+
+
+  auction-catalogue-service:
+    build:
+      context: .
+      dockerfile: auction-catalogue-service/Dockerfile
+    ports:
+      - "8086:8086"
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql_db:3306/catalogue_service_db?serverTimezone=UTC
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=pass
+    networks:
+      - bidder-network
+    depends_on:
+      eureka-server:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+      api-gateway:
+        condition: service_started
+      mysql_db:
+        condition: service_healthy
+
+  auction-processing-service:
+    build:
+      context: .
+      dockerfile: auction-processing-service/Dockerfile
+    ports:
+      - "8085:8085"
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql_db:3306/auction_processing_service_db
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=pass
+    networks:
+      - bidder-network
+    depends_on:
+      eureka-server:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+      api-gateway:
+        condition: service_started
+      mysql_db:
+        condition: service_healthy
+
+  payment-processing-service:
+    build:
+      context: .
+      dockerfile: payment-processing-service/Dockerfile
+    ports:
+      - "8082:8082"
+    networks:
+      - bidder-network
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql_db:3306/payment_processing_service_db
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=pass
+    depends_on:
+      eureka-server:
+        condition: service_started
+      api-gateway:
+        condition: service_started
+      mysql_db:
+        condition: service_healthy
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql_db:3306/user_service_db
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=pass
+    networks:
+      - bidder-network
+    depends_on:
+      eureka-server:
+        condition: service_started
+      api-gateway:
+        condition: service_started
+      mysql_db:
+        condition: service_healthy
+
+  notification-serivce:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_DATA_MONGODB_HOST=mongodb
+    networks:
+      - bidder-network
+    depends_on:
+      - eureka-server
+      - mongodb
+      - api-gateway
+      - rabbitmq
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  bidder-network:
+    driver: bridge
